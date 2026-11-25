@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LLM Pipeline Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a calm, exact lab instrument — every number traceable.
+   IDEA: an intake slip that gets stamped with a ticket and passed through a ruled processing sheet.
+   PICTURE: the live pipeline — text turning into coloured token chips, IDs and vectors.
+   COLOUR and TYPE: stone ground, black ink, brick accent, white panels; Schibsted Grotesk throughout.
+   LAYOUT: intake slip on top, stages stacked as ruled rows, then the shared ledger, then the spelling chart. */
+:root{color-scheme:light dark;--bg:light-dark(#e7e4df,#171513);--panel:light-dark(#ffffff,#221f1c);--ink:light-dark(#141210,#ece8e2);--mute:light-dark(#625c55,#a59d93);--line:light-dark(#d3cdc5,#3a3530);--brick:light-dark(#c8371e,#e85b40);--soft:light-dark(#f4f2ee,#1c1a17)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Schibsted Grotesk",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font-size:clamp(32px,5vw,48px);line-height:1.05;margin:0 0 8px;font-weight:800;text-wrap:balance}
+h2{font-size:26px;line-height:1.1;margin:0 0 6px;font-weight:800;text-wrap:balance}
+.lede{color:var(--mute);max-width:68ch;margin:0}
+.small{font-size:13px;color:var(--mute)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.slip{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,280px);gap:0;margin-top:22px}
+.slip .in{padding:18px;border-right:1px dashed var(--line)}
+.slip .tk{padding:18px;display:flex;flex-direction:column;gap:10px;background:var(--soft);border-radius:0 6px 6px 0}
+label{font-weight:700;font-size:14px;display:block;margin-bottom:4px}
+input[type=text],textarea{width:100%;font:16px/1.45 inherit;font-family:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+textarea{min-height:120px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--brick);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:700 15px/1 inherit;font-family:inherit;min-height:44px;padding:0 16px;border-radius:4px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+button.go{background:var(--brick);border-color:var(--brick);color:#fff}
+button.chip{min-height:36px;font-weight:500;font-size:14px;border-color:var(--line)}
+.ticket{font-size:clamp(26px,4vw,34px);font-weight:800;letter-spacing:.02em;color:var(--brick);line-height:1.1;word-break:break-all}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stats div{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.stats b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.stage{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr);border-top:1px solid var(--line)}
+.stage:first-child{border-top:0}
+.stage>h3{margin:0;padding:16px 18px;font-size:16px;line-height:1.25}
+.stage>h3 span{display:block;font-weight:400;font-size:13px;color:var(--mute);margin-top:4px}
+.stage>.body{padding:14px 18px;border-left:1px solid var(--line);overflow-x:auto}
+.toks{display:flex;flex-wrap:wrap;gap:4px}
+.t{--h:0;display:inline-flex;flex-direction:column;align-items:center;border-radius:3px;padding:3px 6px 2px;background:light-dark(hsl(var(--h) 62% 88%),hsl(var(--h) 34% 25%));font-size:15px;white-space:pre;line-height:1.3}
+.t i{font-style:normal;font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.t.unk{outline:2px solid var(--brick)}
+.merge{font-size:14px;display:grid;gap:4px}
+.merge div{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.merge em{font-style:normal;color:var(--mute);font-size:12px;min-width:8.5em}
+.vec{display:flex;flex-wrap:wrap;gap:10px}
+.vec figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px}
+.vec .strip{display:flex;border:1px solid var(--line)}
+.vec .strip span{width:9px;height:26px}
+.pane-title{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:34px 0 10px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-size:13px;color:var(--mute);font-weight:500;padding:8px 10px;border-bottom:2px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.id{font-weight:700;color:var(--brick);white-space:nowrap}
+tr.load{cursor:pointer}tr.load:hover td{background:var(--soft)}
+.snip{color:var(--mute);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:14px 0 18px}
+.verdict div{padding:14px 16px}
+.verdict b{display:block;font-size:clamp(28px,4vw,40px);line-height:1.05;font-variant-numeric:tabular-nums}
+.verdict .llm b{color:var(--brick)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-bottom:8px}
+.legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.dumb{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr) minmax(0,1fr);gap:0 14px;font-size:14px}
+.dumb .hd{font-size:13px;color:var(--mute);padding:4px 0;border-bottom:2px solid var(--ink)}
+.dumb .w{padding:5px 0;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dumb .w small{color:var(--mute)}
+.track{position:relative;height:30px;border-bottom:1px solid var(--line)}
+.track .ln{position:absolute;top:14px;height:2px;background:var(--mute);opacity:.5}
+.track .d{position:absolute;top:9px;width:12px;height:12px;border-radius:50%;margin-left:-6px}
+.track .d.c{background:var(--ink)}.track .d.m{background:var(--brick)}
+.track .v{position:absolute;top:6px;font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.axis{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.bars{display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:minmax(0,14em) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.bar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .pair{display:grid;gap:3px}
+.bar .b{height:12px;border-radius:2px;display:flex;align-items:center}
+.bar .b span{font-size:12px;margin-left:calc(100% + 6px);white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute)}
+.bar .b.llm{background:var(--brick)}.bar .b.llp{background:var(--ink)}
+.note{border-left:3px solid var(--brick);padding:4px 12px;color:var(--mute);font-size:14px;margin:14px 0}
+.scroll{overflow-x:auto}
+footer{font-size:13px;color:var(--mute)}
+footer a{color:inherit}
+@media(max-width:760px){.slip{grid-template-columns:minmax(0,1fr)}.slip .in{border-right:0;border-bottom:1px dashed var(--line)}.slip .tk{border-radius:0 0 6px 6px}.stage{grid-template-columns:minmax(0,1fr)}.stage>.body{border-left:0;padding-top:0}.dumb{grid-template-columns:minmax(0,6.5em) minmax(0,1fr) minmax(0,1fr)}.track .v{display:none}.bar{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
+@media(prefers-reduced-motion:no-preference){.t{animation:pop .35s both;animation-delay:calc(var(--i,0)*12ms)}@keyframes pop{from{opacity:0;transform:translateY(4px)}}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<section class="band"><div class="wrap">
+  <h1>LLM pipeline explorer</h1>
+  <p class="lede">Submit any text and watch it go through a language model's input pipeline: normalising, splitting, byte-pair merging, token IDs and embeddings. Each submission is stamped with its own ticket ID and kept in a shared ledger, and the chart at the end compares LLM subword tokens with LLP letter-level tokens on spelling.</p>
+
+  <form class="panel slip" id="f">
+    <div class="in">
+      <label for="tag">Your tag <span class="small">(optional, e.g. a group or dataset name)</span></label>
+      <input type="text" id="tag" maxlength="40" autocomplete="off">
+      <div style="height:12px"></div>
+      <label for="txt">Text to tokenize</label>
+      <textarea id="txt" maxlength="2000"></textarea>
+      <div class="row" style="margin-top:10px" id="ex"><span class="small">Web examples:</span></div>
+      <div class="row" style="margin-top:12px">
+        <button class="go" type="submit">Tokenize and save</button>
+        <label class="small" style="display:flex;gap:6px;align-items:center;margin:0;font-weight:400"><input type="checkbox" id="lower"> lowercase first</label>
+      </div>
+    </div>
+    <div class="tk">
+      <div class="small">Ticket ID</div>
+      <div class="ticket" id="ticket">TK-······</div>
+      <div class="small" id="saved">Live preview. Press the button to save it to the ledger.</div>
+      <div class="stats">
+        <div><span class="small">Characters</span><b id="sC">0</b></div>
+        <div><span class="small">LLM tokens</span><b id="sL">0</b></div>
+        <div><span class="small">LLP tokens</span><b id="sP">0</b></div>
+        <div><span class="small">Chars per LLM token</span><b id="sR">–</b></div>
+      </div>
+    </div>
+  </form>
+
+  <div class="panel" style="margin-top:14px" id="stages">
+    <div class="stage"><h3>Normalise<span>NFKC Unicode, whitespace collapsed</span></h3><div class="body" id="g1"></div></div>
+    <div class="stage"><h3>Pre-tokenise<span>Split into words; ▁ marks a leading space</span></h3><div class="body"><div class="toks" id="g2"></div></div></div>
+    <div class="stage"><h3>BPE merges<span id="g3h">Longest word, merge by merge</span></h3><div class="body"><div class="merge" id="g3"></div></div></div>
+    <div class="stage"><h3>LLM token IDs<span>Subword vocabulary, <b id="vs"></b> entries</span></h3><div class="body"><div class="toks" id="g4"></div></div></div>
+    <div class="stage"><h3>LLP token IDs<span>Letter-level: one token per character</span></h3><div class="body"><div class="toks" id="g5"></div></div></div>
+    <div class="stage"><h3>Embedding lookup<span>Each ID picks a row of the embedding table</span></h3><div class="body"><div class="vec" id="g6"></div><p class="small" style="margin:8px 0 0">8 of the dimensions, from a seeded random table, like a model before training.</p></div></div>
+  </div>
+
+  <div class="pane-title"><h2>Shared ledger</h2><span class="small" id="ldst">Connecting…</span></div>
+  <div class="panel scroll">
+    <table class="stack"><thead><tr><th>Ticket</th><th>Submitted by</th><th>Text</th><th class="n">Chars</th><th class="n">LLM</th><th class="n">LLP</th><th class="n">When</th></tr></thead><tbody id="ledger"></tbody></table>
+  </div>
+  <p class="small">Select a row to load it back into the pipeline.</p>
+</div></section>
+
+<section class="band" style="background:var(--panel);border-top:1px solid var(--line)"><div class="wrap">
+  <h2 id="ch-title">LLM vs LLP on spelling tokenization</h2>
+  <p class="lede">25 commonly misspelled English words, each tokenized spelled correctly and misspelled. LLM subword tokenization learned the correct spellings, so a misspelling breaks it into extra pieces. LLP letter-level tokenization barely notices.</p>
+  <div class="verdict" id="verdict"></div>
+  <div class="legend"><span style="--c:var(--ink)">Correct spelling</span><span style="--c:var(--brick)">Misspelling</span></div>
+  <div class="dumb" id="dumb"></div>
+  <div class="note">The vocabulary is a small byte-pair encoding trained in your browser on the web examples plus a word list, so counts are smaller than GPT-class tokenizers, but they follow the same pattern.</div>
+
+  <h2 style="margin-top:34px">Tokens per text: every example and submission</h2>
+  <p class="lede" style="margin-bottom:14px">Letter-level sequences run several times longer than subword sequences for the same text, which is why LLMs use subwords.</p>
+  <div class="legend"><span style="--c:var(--brick)">LLM subword tokens</span><span style="--c:var(--ink)">LLP letter tokens</span></div>
+  <div class="bars" id="bars"></div>
+</div></section>
+
+<footer class="band"><div class="wrap">Web examples come from Wikipedia's <a href="https://en.wikipedia.org/wiki/Large_language_model">Large language model</a> article (condensed) and its <a href="https://en.wikipedia.org/wiki/Commonly_misspelled_English_words">Commonly misspelled English words</a> list. Ledger entries are visible to everyone who can open this page.</div></footer>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- web data ---------- */
+const WEB=[
+ {name:"LLM intro",text:"Large language models are AI systems, usually built on neural networks, that learn from enormous collections of written material. They can produce, condense, convert between languages, and examine text in a wide variety of settings."},
+ {name:"Tokenization",text:"Before a model can work with text, that text has to become numbers, so a vocabulary is chosen and each entry receives a unique integer index. Byte-pair encoding is one common method, repeatedly merging the most frequent adjacent character pairs until the vocabulary reaches a set size."},
+ {name:"Padding",text:"Tokenization also compresses the datasets. Shorter texts also need padding so that every input in a batch matches the length of the longest one, because models expect arrays that are not jagged."},
+ {name:"Misspellings",text:"I definately beleive it is neccessary to acomodate my freind and collegue at the begining of the buisness calender."}
+];
+const PAIRS=[["absence","absense"],["accommodate","accomodate"],["acknowledge","acknowlege"],["acquaintance","acquaintence"],["achieve","acheive"],["address","adress"],["almost","allmost"],["amateur","amatuer"],["argument","arguement"],["beginning","begining"],["believe","beleive"],["business","buisness"],["calendar","calender"],["cemetery","cemetary"],["chief","cheif"],["colleague","collegue"],["committed","commited"],["consensus","concensus"],["definitely","definately"],["embarrass","embarass"],["equipment","equiptment"],["existence","existance"],["friend","freind"],["independent","independant"],["necessary","neccessary"]];
+const SEED="the of and to in is that for it as with was on be by this are or from at an which have not they has but their one all were there can more when been also other into its than some these time only would about new such may first used like each many most two over then them very model models language text word words data training learn learning neural network networks token tokens vocabulary input output number numbers character characters pair pairs merge merging common method set size batch length process system systems human write written read reading people make made work working day year good great small large long short high low part place case point group problem fact hand question right left world life school student state country company program information government family between under after before because through during without again against where while still every never always often here there today";
+
+/* ---------- BPE (LLM) ---------- */
+const SP='▁', SPECIAL=['<pad>','<bos>','<eos>','<unk>'];
+const BASE=[SP];for(let c=33;c<127;c++)BASE.push(String.fromCharCode(c));
+const norm=(s,lower)=>{s=(s||'').normalize('NFKC').replace(/\s+/g,' ').trim();return lower?s.toLowerCase():s};
+const pre=s=>(s.match(/[A-Za-zÀ-ɏ]+|\d+|[^\sA-Za-z\d]/g)||[]);
+function preWords(s){const out=[];const re=/(\s?)([A-Za-zÀ-ɏ]+|\d+|[^\sA-Za-z\d])/g;let m;while(m=re.exec(s))out.push((m[1]||out.length===0?SP:'')+m[2]);return out}
+const vocab=[...SPECIAL,...BASE];const tid=new Map(vocab.map((t,i)=>[t,i]));const ranks=new Map();
+(function train(){
+  const freq=new Map();const add=(w,k)=>freq.set(w,(freq.get(w)||0)+k);
+  const corpus=[...WEB.slice(0,3).map(e=>e.text),SEED].join(' ');
+  for(const w of preWords(norm(corpus)))add(w,2);
+  for(const w of preWords(norm(corpus,true)))add(w,1);
+  for(const[c] of PAIRS){add(SP+c,3);add(SP+c[0].toUpperCase()+c.slice(1),1)}
+  let words=[...freq].map(([w,f])=>({s:[...w],f}));
+  const TARGET=400;
+  for(let r=0;r<TARGET;r++){
+    const pc=new Map();
+    for(const w of words)for(let i=0;i<w.s.length-1;i++){const k=w.s[i]+'\u0000'+w.s[i+1];pc.set(k,(pc.get(k)||0)+w.f)}
+    let best=null,bf=1;for(const[k,f] of pc)if(f>bf){bf=f;best=k}
+    if(!best)break;
+    const[a,b]=best.split('\u0000'),m=a+b;ranks.set(best,r);if(!tid.has(m)){tid.set(m,vocab.length);vocab.push(m)}
+    for(const w of words){if(w.s.length<2)continue;const n=[];for(let i=0;i<w.s.length;i++){if(i<w.s.length-1&&w.s[i]===a&&w.s[i+1]===b){n.push(m);i++}else n.push(w.s[i])}w.s=n}
+  }
+})();
+const cache=new Map();
+function bpeWord(w,trace){
+  if(!trace&&cache.has(w))return cache.get(w);
+  let s=[...w];const steps=trace?[s.slice()]:null;
+  while(s.length>1){
+    let bi=-1,br=Infinity;for(let i=0;i<s.length-1;i++){const r=ranks.get(s[i]+'\u0000'+s[i+1]);if(r!==undefined&&r<br){br=r;bi=i}}
+    if(bi<0)break;s=[...s.slice(0,bi),s[bi]+s[bi+1],...s.slice(bi+2)];if(trace)steps.push(s.slice());
+  }
+  if(trace)return steps;cache.set(w,s);return s;
+}
+const llm=t=>preWords(t).flatMap(w=>bpeWord(w)).map(p=>({p,id:tid.has(p)?tid.get(p):3}));
+const llp=t=>[...t].map(c=>{const p=c===' '?SP:c;const id=tid.has(p)&&BASE.includes(p)?tid.get(p):(p.codePointAt(0)<127?3:4+((p.codePointAt(0)*31)%95));return{p,id}});
+const countLLM=t=>llm(norm(t)).length, countLLP=t=>[...norm(t)].length;
+$('vs').textContent=vocab.length;
+
+/* ---------- render pipeline ---------- */
+const hue=id=>(id*137.5)%360;
+const chip=(p,id,i,unk)=>`<span class="t${unk?' unk':''}" style="--h:${hue(id).toFixed(0)};--i:${Math.min(i,60)}">${esc(p)}<i>${id}</i></span>`;
+function rnd(seed){let x=seed*2654435761>>>0;return()=>{x^=x<<13;x>>>=0;x^=x>>17;x^=x<<5;x>>>=0;return x/4294967296}}
+function fnv(s){let h=2166136261;for(const c of s){h^=c.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h}
+let current=null;
+function run(raw,ticket){
+  const t=norm(raw,$('lower').checked);
+  $('g1').innerHTML=t?`<span>${esc(t)}</span>`:'<span class="small">Type or pick an example above to begin.</span>';
+  const ws=preWords(t);
+  $('g2').innerHTML=ws.map((w,i)=>`<span class="t" style="--h:30;--i:${Math.min(i,60)}">${esc(w)}</span>`).join('')||'<span class="small">Nothing yet.</span>';
+  const longest=ws.filter(w=>/[A-Za-z]/.test(w)).sort((a,b)=>b.length-a.length)[0];
+  if(longest){const st=bpeWord(longest,true);$('g3h').textContent=`“${longest.replace(SP,'')}”: ${st.length-1} merges to ${st[st.length-1].length} token${st[st.length-1].length>1?'s':''}`;
+    const show=st.length>7?[...st.slice(0,3),null,...st.slice(-3)]:st;
+    $('g3').innerHTML=show.map((s,k)=>s===null?'<div><em>…</em></div>':`<div><em>${k===0?'characters':(s===st[st.length-1]?'final':'merge '+st.indexOf(s))}</em>${s.map(p=>chip(p,tid.get(p)??3,0)).join('')}</div>`).join('')}
+  else{$('g3h').textContent='Longest word, merge by merge';$('g3').innerHTML='<span class="small">No words yet.</span>'}
+  const L=llm(t),P=llp(t);
+  $('g4').innerHTML=L.map((x,i)=>chip(x.p,x.id,i,x.id===3)).join('')||'<span class="small">No tokens.</span>';
+  $('g5').innerHTML=P.slice(0,400).map((x,i)=>chip(x.p,x.id,i)).join('')+(P.length>400?`<span class="small">…and ${P.length-400} more</span>`:'')||'<span class="small">No tokens.</span>';
+  $('g6').innerHTML=L.slice(0,16).map(x=>{const r=rnd(x.id+1);return`<figure><div class="strip">${Array.from({length:8},()=>{const v=r()*2-1;return`<span style="background:${v>0?`rgba(200,55,30,${v.toFixed(2)})`:`rgba(110,100,90,${(-v).toFixed(2)})`}"></span>`}).join('')}</div>${esc(x.p)} · ${x.id}</figure>`}).join('')+(L.length>16?`<span class="small" style="align-self:center">+${L.length-16} more rows</span>`:'');
+  $('sC').textContent=[...t].length;$('sL').textContent=L.length;$('sP').textContent=P.length;$('sR').textContent=L.length?([...t].length/L.length).toFixed(2):'–';
+  $('ticket').textContent=ticket||'TK-······';
+  current={t,L:L.length,P:P.length};
+}
+
+/* ---------- web example buttons ---------- */
+$('ex').insertAdjacentHTML('beforeend',WEB.map((e,i)=>`<button type="button" class="chip" data-i="${i}">${esc(e.name)}</button>`).join(''));
+$('ex').addEventListener('click',e=>{const b=e.target.closest('button[data-i]');if(!b)return;$('txt').value=WEB[b.dataset.i].text;$('saved').textContent='Live preview. Press the button to save it to the ledger.';run($('txt').value)});
+let deb;$('txt').addEventListener('input',()=>{clearTimeout(deb);deb=setTimeout(()=>{$('saved').textContent='Live preview. Press the button to save it to the ledger.';run($('txt').value)},150)});
+$('lower').addEventListener('change',()=>run($('txt').value,$('ticket').textContent.includes('·')?null:$('ticket').textContent));
+
+/* ---------- shared ledger ---------- */
+let db=null,U=null,me=null,rows=[];const local=[];
+const ago=ts=>{const m=Math.round((Date.now()-ts)/60000);return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':new Date(ts).toLocaleDateString()};
+async function renderLedger(){
+  const list=[...rows,...local.filter(l=>!rows.some(r=>r.id===l.id))].sort((a,b)=>b.ts-a.ts);
+  let names={};try{if(U&&U.profiles){const ids=[...new Set(list.map(r=>r.uid).filter(Boolean))];if(ids.length)names=await U.profiles(ids)||{}}}catch(e){}
+  $('ledger').innerHTML=list.length?list.map(r=>{const who=(names[r.uid]&&names[r.uid].name)||(r.uid&&r.uid===me?'You':'Someone');return`<tr class="load" data-id="${esc(r.id)}" tabindex="0"><td class="id">${esc(r.id)}</td><td>${esc(who)}${r.tag?`<div class="small">${esc(r.tag)}</div>`:''}</td><td><span class="snip">${esc(r.text)}</span></td><td class="n">${r.chars|0}</td><td class="n">${r.llm|0}</td><td class="n">${r.llp|0}</td><td class="n">${esc(ago(r.ts))}</td></tr>`}).join(''):'<tr><td colspan="7" class="small">No submissions yet. Yours will be the first.</td></tr>';
+  drawBars(list);
+}
+$('ledger').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const r=[...rows,...local].find(x=>x.id===tr.dataset.id);if(!r)return;$('txt').value=r.text;$('tag').value=r.tag||'';$('saved').textContent='Loaded from the ledger.';run(r.text,r.id);window.scrollTo({top:0,behavior:'smooth'})});
+$('ledger').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
+
+$('f').addEventListener('submit',async e=>{
+  e.preventDefault();const text=$('txt').value.trim();if(!text){$('saved').textContent='Add some text first.';$('txt').focus();return}
+  const ts=Date.now(),id='TK-'+fnv((me||'anon')+text+ts).toString(36).toUpperCase().padStart(7,'0').slice(-7);
+  run(text,id);
+  const rec={id,uid:me||'',tag:$('tag').value.trim().slice(0,40),text:text.slice(0,2000),chars:[...current.t].length,llm:current.L,llp:current.P,ts};
+  if(db){try{$('saved').textContent='Saving…';await db.collection('submissions').doc(id).set(rec);$('saved').textContent='Saved to the shared ledger. Keep this ID to find it again.'}catch(err){local.push(rec);$('saved').textContent='Could not save to the shared ledger (you may only have view access). Kept for this visit only.'}}
+  else{local.push(rec);$('saved').textContent='Stored for this visit only: open the page signed in on claude.ai to share it.'}
+  renderLedger();
+});
+
+(async()=>{
+  const timer=setTimeout(()=>{if(!db)$('ldst').textContent='Shared ledger unavailable here. Submissions stay in this visit.'},10000);
+  try{
+    if(typeof claude==='undefined'||!claude.use){$('ldst').textContent='Shared ledger unavailable here. Submissions stay in this visit.';return}
+    U=await claude.use('user');try{if(U&&U.id)me=await U.id()}catch(e){}
+    db=await claude.use('db');clearTimeout(timer);
+    if(!db){$('ldst').textContent='Sign in on claude.ai to see and add shared submissions.';return}
+    $('ldst').textContent='Loading…';
+    const t2=setTimeout(()=>{$('ldst').textContent='The ledger is taking a while to load.'},10000);
+    db.collection('submissions').limit(300).onSnapshot(snap=>{
+      clearTimeout(t2);
+      const docs=snap&&snap.docs?snap.docs:(Array.isArray(snap)?snap:[]);
+      rows=docs.map(d=>typeof d.data==='function'?{...d.data(),id:(d.data().id||d.id)}:(d.data||d)).filter(r=>r&&r.id&&typeof r.text==='string');
+      $('ldst').textContent=rows.length+' submission'+(rows.length===1?'':'s')+' from all users';
+      renderLedger();
+    },err=>{clearTimeout(t2);$('ldst').textContent='Could not load the shared ledger.'});
+  }catch(e){$('ldst').textContent='Shared ledger unavailable here. Submissions stay in this visit.'}
+})();
+
+/* ---------- spelling chart ---------- */
+const sp=PAIRS.map(([c,m])=>({c,m,lc:bpeWord(SP+c).length,lm:bpeWord(SP+m).length,pc:c.length,pm:m.length}));
+const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const aLc=avg(sp.map(d=>d.lc)),aLm=avg(sp.map(d=>d.lm)),aPc=avg(sp.map(d=>d.pc)),aPm=avg(sp.map(d=>d.pm));
+const grew=sp.filter(d=>d.lm>d.lc).length;
+$('verdict').innerHTML=`<div class="panel llm"><span class="small">LLM tokens per word, correct → misspelled</span><b>${aLc.toFixed(1)} → ${aLm.toFixed(1)}</b><span class="small">${((aLm/aLc-1)*100).toFixed(0)}% more tokens; ${grew} of ${sp.length} words split further</span></div><div class="panel"><span class="small">LLP tokens per word, correct → misspelled</span><b>${aPc.toFixed(1)} → ${aPm.toFixed(1)}</b><span class="small">${((aPm/aPc-1)*100).toFixed(0)}% change, only letters added or dropped</span></div><div class="panel"><span class="small">Sequence length, LLP vs LLM</span><b>${(aPc/aLc).toFixed(1)}×</b><span class="small">longer for letter-level on correct words</span></div>`;
+document.title='LLM Pipeline Explorer';
+const mxL=Math.max(...sp.map(d=>Math.max(d.lc,d.lm)))+1,mxP=Math.max(...sp.map(d=>Math.max(d.pc,d.pm)))+1;
+const track=(a,b,mx)=>{const x1=a/mx*100,x2=b/mx*100,lo=Math.min(x1,x2),hi=Math.max(x1,x2);return`<div class="track"><div class="ln" style="left:${lo}%;width:${hi-lo}%"></div><div class="d c" style="left:${x1}%"></div><div class="d m" style="left:${x2}%"></div><span class="v" style="left:calc(${hi}% + 10px)">${a===b?a:a+'→'+b}</span></div>`};
+$('dumb').innerHTML=`<div class="hd">Word</div><div class="hd">LLM subword tokens</div><div class="hd">LLP letter tokens</div>`+sp.map(d=>`<div class="w" title="${d.c} / ${d.m}">${d.c}<br><small>${d.m}</small></div>${track(d.lc,d.lm,mxL)}${track(d.pc,d.pm,mxP)}`).join('')+`<div></div><div class="axis"><span>0</span><span>${mxL}</span></div><div class="axis"><span>0</span><span>${mxP}</span></div>`;
+
+/* ---------- per-text bars ---------- */
+function drawBars(list){
+  const items=[...WEB.map(e=>({lbl:'Web: '+e.name,text:e.text})),...list.slice(0,12).map(r=>({lbl:r.id+(r.tag?' · '+r.tag:''),text:r.text}))].map(x=>({...x,l:countLLM(x.text),p:countLLP(x.text)}));
+  const mx=Math.max(...items.map(x=>x.p),1);
+  $('bars').innerHTML=items.map(x=>`<div class="bar"><div class="lbl" title="${esc(x.lbl)}">${esc(x.lbl)}</div><div class="pair"><div class="b llm" style="width:${(x.l/mx*85).toFixed(1)}%"><span>${x.l} LLM</span></div><div class="b llp" style="width:${(x.p/mx*85).toFixed(1)}%"><span>${x.p} LLP · ${(x.p/Math.max(x.l,1)).toFixed(1)}×</span></div></div></div>`).join('');
+}
+
+/* ---------- start mid-use ---------- */
+$('txt').value=WEB[3].text;run(WEB[3].text);renderLedger();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pipeliner — Token Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a field atlas for language models — precise, outdoorsy, calm.
+   IDEA: a survey map: text is terrain, tokens are surveyed plots, embeddings are a 3D relief.
+   PICTURE: the live token strip at top; the rotating embedding relief full-bleed with a legend panel.
+   COLOUR and TYPE: sea #bfe3ee ground, paper-land panels, contour brown lines, ink #13242e, route magenta accent; Overpass + Overpass Mono for tokens.
+   LAYOUT: sticky map-sheet header; sections stack as map sheets; embedding space bleeds edge to edge with a legend card. */
+:root{color-scheme:light dark;--sea:light-dark(#bfe3ee,#0d1c24);--land:light-dark(#fbfbf2,#132a35);--land2:light-dark(#f1f2e6,#183441);--ink:light-dark(#13242e,#e6efe9);--mute:light-dark(#4f6470,#97adb6);--contour:light-dark(#a8551b,#d98a4e);--route:light-dark(#d6127e,#ff4fa8);--line:light-dark(#d9d6c3,#2a4652)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px;scroll-behavior:smooth}
+body{margin:0;background:var(--sea);color:var(--ink);font:16px/1.55 Overpass,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(28px,4vw,60px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font-size:clamp(32px,5vw,50px);line-height:1.05;margin:0 0 8px;font-weight:800;text-wrap:balance}
+h2{font-size:22px;line-height:1.15;margin:0 0 8px;font-weight:800}
+h3{font-size:18px;margin:0 0 6px;font-weight:800}
+p{margin:0 0 10px}.lede{color:var(--mute);max-width:66ch}
+.small{font-size:13px;color:var(--mute)}
+.mono{font-family:"Overpass Mono",ui-monospace,monospace}
+.panel{background:var(--land);border:1px solid var(--line);border-radius:8px;box-shadow:0 1px 0 var(--line)}
+header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--land) 92%,transparent);backdrop-filter:blur(6px);border-bottom:2px solid var(--contour)}
+header.top .wrap{display:flex;align-items:center;gap:16px;padding:10px max(5vw,16px);flex-wrap:wrap}
+.brand{font-weight:800;font-size:20px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink)}
+.brand svg{flex:none}
+nav.scroll{display:flex;gap:4px;overflow-x:auto;margin-left:auto}
+nav a{flex:none;color:var(--ink);text-decoration:none;font-weight:600;font-size:15px;padding:10px 12px;border-radius:6px}
+nav a:hover,nav a.on{background:var(--sea)}
+button{font:600 15px/1 Overpass,system-ui,sans-serif;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid var(--line);background:var(--land);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--contour)}
+button.on{background:var(--ink);color:var(--land);border-color:var(--ink)}
+button.route{background:var(--route);border-color:var(--route);color:#fff}
+button small{font-weight:400;opacity:.75;margin-left:4px}
+:focus-visible{outline:3px solid var(--route);outline-offset:2px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.stat{padding:12px 16px}
+.stat b{display:block;font-size:clamp(24px,3.4vw,34px);font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat:nth-child(1) b{color:var(--route)}
+.play{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:14px}
+.play .panel{padding:16px}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ph h2{font-size:15px;margin:0;color:var(--contour)}
+textarea{width:100%;min-height:170px;font:16px/1.5 "Overpass Mono",monospace;color:var(--ink);background:var(--land2);border:1px solid var(--line);border-radius:6px;padding:12px;resize:vertical}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.presets button{min-height:36px;font-size:14px;font-weight:400}
+.desc{border-left:3px solid var(--contour);padding:4px 12px;font-size:14px;color:var(--mute);margin-top:6px}
+.toks{display:flex;flex-wrap:wrap;gap:4px;min-height:120px;align-content:flex-start;max-height:340px;overflow:auto;padding:2px}
+.tk{--h:30;font:15px/1.35 "Overpass Mono",monospace;padding:3px 6px;border-radius:4px;background:light-dark(hsl(var(--h) 70% 86%),hsl(var(--h) 38% 27%));border-bottom:2px solid light-dark(hsl(var(--h) 45% 62%),hsl(var(--h) 45% 45%));white-space:pre}
+.tk.unk{background:var(--route);color:#fff;border-color:var(--route)}
+.tk.frag{outline:1px dashed var(--contour)}
+.arr{font:13px/1.6 "Overpass Mono",monospace;background:var(--land2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;max-height:130px;overflow:auto;word-break:break-all;color:var(--ink)}
+.check{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;min-height:36px}
+.check input{width:18px;height:18px;accent-color:var(--route)}
+/* embeddings */
+.atlas{position:relative;background:var(--land2);border-top:2px solid var(--contour);border-bottom:2px solid var(--contour)}
+.atlas .fig{position:relative;height:clamp(440px,62vh,640px);touch-action:none;cursor:grab}
+.atlas .fig.drag{cursor:grabbing}
+.atlas canvas{position:absolute;inset:0;width:100%;height:100%}
+.legend{position:absolute;top:16px;left:max(5vw,16px);width:min(330px,calc(100% - 32px));padding:16px;max-height:calc(100% - 32px);overflow:auto}
+.legend ul{list-style:none;padding:0;margin:8px 0 12px;display:grid;gap:4px;font-size:14px}
+.legend li{display:flex;align-items:center;gap:8px}
+.legend li i{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
+.inspect{position:absolute;top:16px;right:max(5vw,16px);width:min(300px,calc(100% - 32px));padding:16px}
+.inspect h2{font-size:28px;margin:0;color:var(--route)}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;font-size:14px;margin:8px 0}
+.kv dt{color:var(--mute)}.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.vec{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;margin:6px 0 10px}
+.vec span{height:30px;border-radius:2px;position:relative}
+.nb{display:grid;gap:4px;font-size:14px}
+.nb div{display:grid;grid-template-columns:minmax(0,1fr) 60px;gap:8px;align-items:center}
+.nb .m{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.nb .m span{display:block;height:100%;background:var(--contour)}
+.status{font-size:13px;margin-top:10px;padding:6px 10px;border-radius:6px;background:var(--sea)}
+.atlas-note{max-width:1240px;margin:14px auto 0;padding:0 max(5vw,16px)}
+@media(max-width:900px){.legend,.inspect{position:static;width:auto;margin:12px max(5vw,16px);max-height:none}.atlas .fig{height:420px}}
+/* vocab size */
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.two .panel{padding:18px}
+.bars{display:grid;gap:12px;margin:12px 0}
+.bar{display:grid;grid-template-columns:minmax(0,7.5em) minmax(0,1fr);gap:10px;align-items:center;font-size:14px}
+.bar .tr{position:relative;height:26px;background:var(--land2);border-radius:4px}
+.bar .f{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--c,var(--contour));transition:width .5s}
+.bar .v{position:absolute;top:50%;transform:translateY(-50%);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px;font-weight:600}
+.take{background:var(--sea);border-radius:6px;padding:10px 14px;font-size:14px}
+.formula{font:14px "Overpass Mono",monospace;color:var(--contour);margin:4px 0 10px}
+/* concepts */
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+details.card{padding:0}
+details.card summary{list-style:none;cursor:pointer;padding:16px 18px;display:flex;gap:14px;align-items:baseline;min-height:56px}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary .n{font:600 13px "Overpass Mono",monospace;color:var(--contour);flex:none}
+details.card summary h3{margin:0;flex:1}
+details.card summary::after{content:"+";font-weight:800;font-size:22px;color:var(--contour);line-height:1}
+details.card[open] summary::after{content:"–"}
+details.card .in{padding:0 18px 18px 18px;border-top:1px dashed var(--line);padding-top:12px}
+footer{font-size:13px;color:var(--mute);border-top:2px solid var(--contour);background:var(--land)}
+footer a{color:inherit}
+@media(max-width:900px){.play,.two{grid-template-columns:minmax(0,1fr)}.cards{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}nav.scroll{margin-left:0;width:100%}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.bar .f{transition:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#tokenizer"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="6" fill="#13242e"/><path d="M5 19c4-7 7 3 11-4s5-6 7-5" stroke="#d6127e" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="5" cy="19" r="2" fill="#bfe3ee"/><circle cx="23" cy="10" r="2" fill="#bfe3ee"/></svg>Pipeliner</a>
+  <nav class="scroll" id="nav"><a href="#tokenizer">Tokenizer</a><a href="#embeddings">3D Embeddings</a><a href="#vocab-size">Vocab Size</a><a href="#concepts">Concept Guide</a></nav>
+</div></header>
+
+<section class="band" id="tokenizer"><div class="wrap">
+  <div class="head">
+    <div><h1>Live tokenizer playground</h1><p class="lede">See how modern LLMs and older NLP models cut the same text into tokens, subwords and numeric IDs. GPT-4o and GPT-4 run their real vocabularies right in your browser.</p></div>
+    <div class="seg" id="models" role="group" aria-label="Model"></div>
+  </div>
+  <div class="stats">
+    <div class="panel stat"><span class="small">Tokens</span><b id="sT">0</b></div>
+    <div class="panel stat"><span class="small">Characters</span><b id="sC">0</b></div>
+    <div class="panel stat"><span class="small">Chars per token</span><b id="sR">–</b></div>
+    <div class="panel stat"><span class="small">Model vocab size</span><b id="sV">–</b></div>
+  </div>
+  <div class="play">
+    <div class="panel">
+      <div class="ph"><h2>Input text</h2><button type="button" id="clear" style="min-height:36px">Clear</button></div>
+      <label for="txt" class="small" style="display:block;margin-bottom:4px">Type or paste anything</label>
+      <textarea id="txt" spellcheck="false"></textarea>
+      <div class="presets" id="presets"></div>
+      <div class="desc" id="mdesc"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Token output</h2>
+        <div class="seg" style="align-items:center"><span class="small" id="unk"></span>
+          <label class="check"><input type="checkbox" id="spaces" checked> Show spaces (·)</label>
+          <div class="seg" role="group" aria-label="View"><button type="button" class="on" data-v="text" style="min-height:36px">Text</button><button type="button" data-v="ids" style="min-height:36px">Token IDs</button></div>
+        </div>
+      </div>
+      <div class="toks" id="toks" aria-live="polite"></div>
+      <div class="ph" style="margin-top:14px"><h2>Token ID sequence (model input tensor)</h2><button type="button" id="copy" style="min-height:36px">Copy array</button></div>
+      <div class="arr" id="arr">[]</div>
+    </div>
+  </div>
+</div></section>
+
+<section id="embeddings" style="padding-top:clamp(28px,4vw,60px)">
+  <div class="wrap band" style="padding-top:0;padding-bottom:20px">
+    <h1>3D vector and embedding space</h1>
+    <p class="lede">Every token ID points to a vector. Drag to rotate, scroll to zoom and click a word to inspect it. Switch between meaning-based and spelling-based space to see why models learn meaning.</p>
+    <div class="seg" style="margin-top:12px"><div class="seg" role="group" aria-label="Embedding mode"><button type="button" class="on" data-m="sem">Meaning-based (semantic)</button><button type="button" data-m="lex">Spelling-based (lexical)</button></div><button type="button" id="analogy">King − Man + Woman ≈ ?</button><button type="button" id="reset">Reset view</button></div>
+  </div>
+  <div class="atlas">
+    <div class="fig" id="fig"><canvas id="cv" aria-label="3D embedding space of 40 words"></canvas></div>
+    <div class="panel legend"><h3>Legend</h3><ul id="cats"></ul><p class="small" id="modeNote"></p></div>
+    <div class="panel inspect" id="insp"></div>
+  </div>
+  <p class="atlas-note small">Positions come from a small simulated embedding table (64 dimensions projected to 3). Token IDs are real GPT-4o IDs once the vocabulary has loaded.</p>
+</section>
+
+<section class="band" id="vocab-size"><div class="wrap">
+  <div class="head"><div><h1>Vocabulary size trade-off</h1><p class="lede">A bigger vocabulary makes sequences shorter, so models run faster, but every extra entry adds a row to the embedding table.</p></div>
+  <div class="seg" role="group" aria-label="Benchmark text"><button type="button" class="on" data-b="code">Complex &amp; code</button><button type="button" data-b="prose">English prose</button></div></div>
+  <div class="two">
+    <div class="panel"><h2>Sequence length (fewer = faster)</h2><p class="small" id="bench"></p><div class="bars" id="lenBars"></div><div class="take" id="lenTake"></div></div>
+    <div class="panel"><h2>Embedding table footprint</h2><div class="formula">parameters = vocab size × embedding dim · FP16 = 2 bytes each</div>
+      <div class="seg" role="group" aria-label="Embedding dimension"><button type="button" data-d="768">768 <small>BERT-base</small></button><button type="button" class="on" data-d="2048">2048 <small>small LLM</small></button><button type="button" data-d="4096">4096 <small>Llama-8B</small></button></div>
+      <div class="bars" id="memBars"></div><div class="take" id="memTake"></div></div>
+  </div>
+</div></section>
+
+<section class="band" id="concepts" style="background:var(--land);border-top:2px solid var(--contour)"><div class="wrap">
+  <h1>8 foundational NLP and LLM concepts</h1><p class="lede" style="margin-bottom:18px">Open a card for the idea, then jump straight into a live demo of it.</p>
+  <div class="cards" id="cards"></div>
+</div></section>
+
+<footer class="band"><div class="wrap">Pipeliner is an interactive tokenizer atlas. GPT-4o (o200k_base) and GPT-4 (cl100k_base) use the real vocabularies via js-tiktoken. BERT and Legacy Word are simulations with vocabularies built from cl100k word pieces (30,522 and 10,000 entries). Embedding positions are illustrative.</div></footer>
+
+<script src="tiktoken.js"></script>
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>n.toLocaleString('en-US');
+
+/* ---------------- models ---------------- */
+const M={
+ gpt4o:{name:'GPT-4o',tag:'200k',size:200019,file:'o200k.json',desc:'GPT-4o (o200k_base) uses byte-level BPE with about 200k tokens. Leading spaces join the next word, code and many languages compress well, and rare words split into familiar subword pieces. It never produces an unknown token.'},
+ gpt4:{name:'GPT-4',tag:'100k',size:100277,file:'cl100k.json',desc:'GPT-4 (cl100k_base) is the same byte-level BPE idea with half the vocabulary, about 100k tokens. Non-English text and code split into more pieces than with GPT-4o.'},
+ bert:{name:'BERT',tag:'30k',size:30522,file:'bert_vocab.json',desc:'BERT uses WordPiece with 30,522 entries. Text is lowercased, punctuation splits off, and words not in the vocabulary break into pieces marked ##. Characters it has never seen, like emoji, become [UNK]. Input is wrapped in [CLS] … [SEP].'},
+ word:{name:'Legacy Word',tag:'10k',size:10000,file:'word_vocab.json',desc:'An old-style word-level tokenizer with 10,000 whole words. Anything outside that list, including typos and rare words, collapses into a single <UNK> token and its meaning is lost.'}
+};
+const ORDER=['gpt4o','gpt4','bert','word'];
+const state={model:'gpt4o',view:'text',mode:'sem',bench:'code',dim:2048};
+const enc={},vmap={};
+async function load(k){
+  if(M[k].ready)return true;if(M[k].loading)return M[k].loading;
+  M[k].loading=(async()=>{try{const r=await fetch(M[k].file);if(!r.ok)throw 0;const j=await r.json();
+    if(k.startsWith('gpt')){enc[k]=new Tiktoken(j)}else{vmap[k]=new Map(j.map((t,i)=>[t,i]));M[k].list=j}
+    M[k].ready=true;return true}catch(e){M[k].failed=true;return false}})();
+  return M[k].loading;
+}
+/* BERT basic + WordPiece */
+function bertTok(text){
+  const v=vmap.bert,out=[{t:'[CLS]',id:v.get('[CLS]'),sp:true}];
+  const clean=text.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  const words=clean.match(/[a-z0-9]+|[^\sa-z0-9]/gu)||[];
+  for(const w of words){
+    if(!/^[a-z0-9]+$/.test(w)){out.push(v.has(w)?{t:w,id:v.get(w)}:{t:'[UNK]',id:v.get('[UNK]'),unk:true,src:w});continue}
+    const pieces=[];let s=0,bad=false;
+    while(s<w.length){let e=w.length,cur=null;while(s<e){const sub=(s>0?'##':'')+w.slice(s,e);if(v.has(sub)){cur=sub;break}e--}if(!cur){bad=true;break}pieces.push(cur);s=e}
+    if(bad||w.length>100)out.push({t:'[UNK]',id:v.get('[UNK]'),unk:true,src:w});else for(const p of pieces)out.push({t:p,id:v.get(p)});
+  }
+  out.push({t:'[SEP]',id:v.get('[SEP]'),sp:true});return out;
+}
+function wordTok(text){const v=vmap.word;return(text.toLowerCase().match(/[a-z]+|\d+|[^\sa-z\d]/gu)||[]).map(w=>v.has(w)?{t:w,id:v.get(w)}:{t:'<UNK>',id:1,unk:true,src:w})}
+function gptTok(k,text){const e=enc[k],ids=e.encode(text);return ids.map(id=>{let t=e.decode([id]);return{t,id,frag:t.includes(String.fromCharCode(0xFFFD))}})}
+function tokenize(k,text){if(!M[k].ready)return null;return k==='bert'?bertTok(text):k==='word'?wordTok(text):gptTok(k,text)}
+
+/* ---------------- playground ---------------- */
+const PRESETS={
+ 'Standard English':'A tokenizer turns your sentence into small pieces called tokens. Common words stay whole, while rare ones are split into familiar parts before the model ever sees them.',
+ 'Subwords & typos':'Unbelievably, the antidisestablishmentarian tokenizer definately mispelled "recieve" and "seperate" while hyperparameterizing its internationalization pipeline.',
+ 'Python code':'def tokenize(text):\n    words = text.lower().split()\n    return [w for w in words if w.isalpha()]\n\nprint(tokenize("Hello World 2026"))',
+ 'Emojis & symbols':'Café ☕ costs €4.50 — naïve résumé 🚀🔥 ∑x² ≥ 10, 日本語 and हिन्दी too.'
+};
+$('presets').innerHTML='<span class="small" style="align-self:center">Samples:</span>'+Object.keys(PRESETS).map(k=>`<button type="button" data-p="${esc(k)}">${esc(k)}</button>`).join('');
+$('models').innerHTML=ORDER.map(k=>`<button type="button" data-k="${k}" class="${k===state.model?'on':''}">${M[k].name}<small>${M[k].tag}</small></button>`).join('');
+const HUES=[28,195,330,95,45,250];
+let lastIds=[];
+async function renderPlay(){
+  const k=state.model,text=$('txt').value;
+  $('mdesc').innerHTML=`<b>${M[k].name}:</b> ${esc(M[k].desc)}`;$('sV').textContent=fmt(M[k].size);$('sC').textContent=fmt([...text].length);
+  if(!M[k].ready){$('toks').innerHTML=`<span class="small">${M[k].failed?'Could not load this vocabulary.':'Loading the '+M[k].name+' vocabulary…'}</span>`;await load(k);if(state.model!==k)return;if(!M[k].ready){$('toks').innerHTML='<span class="small">Could not load this vocabulary.</span>';return}}
+  const toks=tokenize(k,text)||[];lastIds=toks.map(t=>t.id);
+  const showSp=$('spaces').checked;
+  $('toks').innerHTML=toks.length?toks.map((t,i)=>{let s=state.view==='ids'?String(t.id):t.t;if(state.view==='text'&&showSp)s=s.replace(/ /g,'·').replace(/\n/g,'↵').replace(/\t/g,'⇥');else if(state.view==='text')s=s.replace(/\n/g,'↵');
+    const title=t.unk?`Unknown: ${t.src}`:t.frag?'Partial byte of a multi-byte character':`ID ${t.id}`;
+    return`<span class="tk${t.unk?' unk':''}${t.frag?' frag':''}" style="--h:${HUES[i%6]}" title="${esc(title)}">${esc(s||'·')}</span>`}).join(''):'<span class="small">Type something to see its tokens.</span>';
+  const unk=toks.filter(t=>t.unk).length;$('unk').textContent=k.startsWith('gpt')?'0 <UNK> (byte fallback)':`${unk} <UNK>`;
+  $('sT').textContent=fmt(toks.length);$('sR').textContent=toks.length?([...text].length/toks.length).toFixed(2):'–';
+  $('arr').textContent='['+lastIds.join(', ')+']';
+}
+let deb;$('txt').addEventListener('input',()=>{clearTimeout(deb);deb=setTimeout(renderPlay,120)});
+$('clear').addEventListener('click',()=>{$('txt').value='';renderPlay();$('txt').focus()});
+$('presets').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(b){$('txt').value=PRESETS[b.dataset.p];renderPlay()}});
+$('models').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b)setModel(b.dataset.k)});
+function setModel(k){state.model=k;for(const b of $('models').children)b.classList.toggle('on',b.dataset.k===k);renderPlay()}
+$('spaces').addEventListener('change',renderPlay);
+document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.v;document.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('on',x===b));renderPlay()}));
+$('copy').addEventListener('click',async()=>{const s='['+lastIds.join(', ')+']';try{await navigator.clipboard.writeText(s);$('copy').textContent='Copied'}catch(e){const r=document.createRange();r.selectNodeContents($('arr'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);$('copy').textContent='Selected, press Ctrl+C'}setTimeout(()=>$('copy').textContent='Copy array',1800)});
+
+/* ---------------- embeddings ---------------- */
+const CATS=[{n:'Animals',c:'#a8551b'},{n:'Royalty & people',c:'#d6127e'},{n:'Vehicles & objects',c:'#1f6f9a'},{n:'Tech & AI',c:'#0f7c80'},{n:'Food & nature',c:'#3f8a3a'}];
+const P=[ // word, cat, semantic xyz
+ ['cat',0,-4.2,1.2,-0.6],['kitten',0,-4.6,0.6,-1.2],['dog',0,-3.2,1.6,0.2],['puppy',0,-3.6,1.0,-0.4],['lion',0,-4.8,2.6,0.8],['tiger',0,-5.2,2.2,0.4],['horse',0,-3.0,2.8,-0.6],['wolf',0,-4.0,2.4,1.2],
+ ['man',1,2,0,0],['woman',1,2,0,2.2],['king',1,4,2,0],['queen',1,4,2,2.2],['boy',1,1.2,-0.9,0],['girl',1,1.2,-0.9,2.2],['prince',1,3.2,1.2,0],['princess',1,3.2,1.2,2.2],
+ ['car',2,0.4,-3.6,-1.4],['truck',2,1.0,-4.2,-1.0],['bus',2,0.2,-4.4,-0.6],['bicycle',2,-0.6,-3.8,-1.8],['train',2,1.2,-4.8,-1.8],['chair',2,-1.2,-2.8,-2.8],['table',2,-0.6,-2.4,-3.2],['cart',2,-0.2,-3.0,-2.2],
+ ['computer',3,-1.2,-0.6,3.6],['robot',3,-0.4,-1.0,4.2],['code',3,-1.8,0.0,4.0],['data',3,-2.2,-0.6,3.2],['model',3,-0.8,0.4,4.6],['token',3,-1.6,0.8,3.8],['network',3,-2.4,0.2,4.4],['chip',3,-0.2,-1.6,3.4],
+ ['apple',4,1.6,3.6,-3.0],['banana',4,2.2,3.2,-3.4],['mango',4,2.0,4.0,-3.6],['bread',4,0.8,3.0,-2.6],['rice',4,1.2,2.6,-3.8],['tree',4,0.0,4.4,-2.0],['river',4,-0.6,4.0,-2.8],['flower',4,0.6,4.8,-2.4]
+];
+function rng(seed){let x=(seed*2654435761)>>>0||1;return()=>{x^=x<<13;x>>>=0;x^=x>>>17;x^=x<<5;x>>>=0;return x/4294967296-0.5}}
+const R=rng(7),PROJ=Array.from({length:64},()=>[R(),R(),R()]);
+const W=P.map(([w,c,x,y,z],i)=>{const r=rng(i+11);const sem=PROJ.map(p=>p[0]*x+p[1]*y+p[2]*z+r()*0.25);
+  const lex=new Array(64).fill(0);const g='^'+w+'$';for(let j=0;j<g.length-1;j++){const bg=g.slice(j,j+2);let h=2166136261;for(const ch of bg){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)>>>0}lex[h%64]+=1;lex[(h>>>8)%64]+=0.5}
+  for(const ch of w)lex[(ch.charCodeAt(0)*7)%64]+=0.35;
+  return{w,c,semP:[x,y,z],sem,lex,pos:[x,y,z]}});
+// lexical 3D: project lex vectors with fixed random matrix, then scale to similar extent
+const R2=rng(99),LP=[0,1,2].map(()=>Array.from({length:64},()=>R2()));
+{const raw=W.map(o=>LP.map(row=>row.reduce((s,v,i)=>s+v*o.lex[i],0)));const mean=[0,1,2].map(a=>raw.reduce((s,p)=>s+p[a],0)/raw.length);const sd=Math.sqrt(raw.reduce((s,p)=>s+p.reduce((t,v,a)=>t+(v-mean[a])**2,0),0)/raw.length/3)||1;raw.forEach((p,i)=>W[i].lexP=p.map((v,a)=>(v-mean[a])/sd*2.8))}
+const cos=(a,b)=>{let d=0,x=0,y=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return d/Math.sqrt(x*y||1)};
+const vecOf=o=>state.mode==='sem'?o.sem:o.lex;
+const near=(v,excl)=>W.filter(o=>!excl.includes(o.w)).map(o=>({o,s:cos(v,vecOf(o))})).sort((a,b)=>b.s-a.s);
+$('cats').innerHTML=CATS.map(c=>`<li style="--c:${c.c}"><i></i>${c.n}</li>`).join('');
+const cv=$('cv'),fig=$('fig'),ctx=cv.getContext('2d');
+let yaw=-0.6,pitch=0.35,zoom=1,sel=W.find(o=>o.w==='cat'),showAn=false,autoRot=!matchMedia('(prefers-reduced-motion: reduce)').matches,anim=null;
+let screen=[];
+function proj(p,Wd,Ht){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  let x=p[0]*cy-p[2]*sy,z=p[0]*sy+p[2]*cy,y=p[1];const y2=y*cp-z*sp,z2=y*sp+z*cp;const f=Math.min(Wd,Ht)/11*zoom,d=14/(14+z2);return[Wd/2+x*f*d,Ht/2-y2*f*d,z2,d]}
+function draw(){
+  const Wd=cv.clientWidth,Ht=cv.clientHeight,dpr=devicePixelRatio||1;if(cv.width!==Wd*dpr||cv.height!==Ht*dpr){cv.width=Wd*dpr;cv.height=Ht*dpr}
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,Wd,Ht);
+  const css=getComputedStyle(document.body),ink=css.color,line=getComputedStyle(fig).getPropertyValue('--line')||'#ccc',contour=getComputedStyle(document.documentElement).getPropertyValue('--contour');
+  const offX=innerWidth>900?Math.min(150,Wd*0.06):0;ctx.save();ctx.translate(offX*0.2,0);
+  // contour rings on the floor
+  ctx.lineWidth=1;for(let r=1;r<=6;r++){ctx.beginPath();for(let a=0;a<=64;a++){const t=a/64*Math.PI*2;const q=proj([Math.cos(t)*r,-5.5,Math.sin(t)*r],Wd,Ht);a?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])}ctx.strokeStyle=contour;ctx.globalAlpha=r%2?0.35:0.18;ctx.stroke()}
+  ctx.globalAlpha=1;
+  // axes
+  [[[-6,0,0],[6,0,0]],[[0,-5.5,0],[0,5.5,0]],[[0,0,-6],[0,0,6]]].forEach(([a,b])=>{const p=proj(a,Wd,Ht),q=proj(b,Wd,Ht);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.strokeStyle=ink;ctx.globalAlpha=0.15;ctx.stroke()});ctx.globalAlpha=1;
+  screen=W.map(o=>({o,s:proj(o.pos,Wd,Ht)})).sort((a,b)=>b.s[2]-a.s[2]);
+  // stems
+  for(const {o,s} of screen){const f=proj([o.pos[0],-5.5,o.pos[2]],Wd,Ht);ctx.beginPath();ctx.moveTo(s[0],s[1]);ctx.lineTo(f[0],f[1]);ctx.strokeStyle=CATS[o.c].c;ctx.globalAlpha=0.18;ctx.stroke()}ctx.globalAlpha=1;
+  // analogy arrows
+  const route=getComputedStyle(document.documentElement).getPropertyValue('--route')||'#d6127e';
+  if(showAn){const g=n=>W.find(o=>o.w===n);const arrow=(a,b,dash)=>{const p=proj(a,Wd,Ht),q=proj(b,Wd,Ht);ctx.beginPath();ctx.setLineDash(dash?[6,5]:[]);ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.strokeStyle=route;ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);const an=Math.atan2(q[1]-p[1],q[0]-p[0]);ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]-10*Math.cos(an-0.4),q[1]-10*Math.sin(an-0.4));ctx.lineTo(q[0]-10*Math.cos(an+0.4),q[1]-10*Math.sin(an+0.4));ctx.fillStyle=route;ctx.fill();ctx.lineWidth=1};
+    arrow(g('man').pos,g('king').pos);arrow(g('woman').pos,g('queen').pos);const t=anTarget();arrow(g('king').pos,t,true);const q=proj(t,Wd,Ht);ctx.beginPath();ctx.arc(q[0],q[1],9,0,7);ctx.strokeStyle=route;ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1}
+  ctx.font='600 13px Overpass, sans-serif';
+  for(const {o,s} of screen){const r=(o===sel?8:5.5)*s[3];ctx.beginPath();ctx.arc(s[0],s[1],r,0,7);ctx.fillStyle=CATS[o.c].c;ctx.fill();if(o===sel){ctx.lineWidth=3;ctx.strokeStyle=ink;ctx.stroke();ctx.lineWidth=1}
+    ctx.globalAlpha=Math.max(0.45,Math.min(1,s[3]));ctx.fillStyle=ink;ctx.fillText(o.w,s[0]+r+4,s[1]+4);ctx.globalAlpha=1}
+  ctx.restore();screen.forEach(e=>e.s[0]+=offX*0.2);
+}
+function anTarget(){const g=n=>W.find(o=>o.w===n).pos;const k=g('king'),m=g('man'),w=g('woman');return k.map((v,i)=>v-m[i]+w[i])}
+function anResult(){const g=n=>W.find(o=>o.w===n);const v=vecOf(g('king')).map((x,i)=>x-vecOf(g('man'))[i]+vecOf(g('woman'))[i]);return near(v,['king','man','woman'])[0]}
+function inspect(){
+  const o=sel,id=enc.gpt4o?enc.gpt4o.encode(' '+o.w):null;const v=vecOf(o);const pv=v.slice(0,8);const mx=Math.max(...v.map(Math.abs))||1;
+  const nb=near(v,[o.w]).slice(0,3);const an=anResult();
+  $('insp').innerHTML=`<span class="small">${CATS[o.c].n}</span><h2>${esc(o.w)}</h2>
+  <dl class="kv"><dt>3D projection</dt><dd class="mono">${o.pos.map(n=>n.toFixed(2)).join(', ')}</dd><dt>GPT-4o token ID</dt><dd class="mono">${id?id.join(' + '):'loading…'}</dd><dt>Vector</dt><dd>64 dims (first 8 shown)</dd></dl>
+  <div class="vec">${pv.map(x=>`<span title="${x.toFixed(3)}" style="background:${x>=0?'var(--contour)':'var(--route)'};opacity:${(0.2+0.8*Math.abs(x)/mx).toFixed(2)}"></span>`).join('')}</div>
+  <div class="small mono" style="margin-bottom:10px">[${pv.map(x=>x.toFixed(2)).join(', ')}, …]</div>
+  <h3 style="font-size:15px">Nearest neighbours</h3><div class="nb">${nb.map(n=>`<div><span>${esc(n.o.w)} <span class="small mono">${n.s.toFixed(3)}</span></span><span class="m"><span style="width:${Math.max(0,n.s*100).toFixed(0)}%"></span></span></div>`).join('')}</div>
+  <div class="status">${showAn?`Vector arithmetic: king − man + woman lands nearest <b>${esc(an.o.w)}</b> (cosine ${an.s.toFixed(2)}) ${an.o.w==='queen'?'✓':'✗ spelling space has no notion of gender or royalty'}`:'Vector arithmetic is off. Press “King − Man + Woman” to try it.'}</div>`;
+  $('modeNote').textContent=state.mode==='sem'?'Meaning-based: words used in similar contexts sit together, so categories form clear clusters and the man→king and woman→queen arrows run parallel.':'Spelling-based: words are placed by shared letters, so cat sits near cart and car, and the categories fall apart.';
+}
+function setMode(m){state.mode=m;document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  const from=W.map(o=>o.pos.slice()),to=W.map(o=>m==='sem'?o.semP:o.lexP),t0=performance.now(),D=matchMedia('(prefers-reduced-motion: reduce)').matches?0:700;
+  cancelAnimationFrame(anim);const step=t=>{const k=D?Math.min(1,(t-t0)/D):1,e=k<.5?2*k*k:1-(-2*k+2)**2/2;W.forEach((o,i)=>o.pos=from[i].map((v,a)=>v+(to[i][a]-v)*e));draw();if(k<1)anim=requestAnimationFrame(step)};anim=requestAnimationFrame(step);inspect()}
+document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.m)));
+$('analogy').addEventListener('click',()=>{showAn=!showAn;$('analogy').classList.toggle('route',showAn);if(showAn)sel=W.find(o=>o.w==='queen');draw();inspect()});
+$('reset').addEventListener('click',()=>{yaw=-0.6;pitch=0.35;zoom=1;draw()});
+let drag=null,moved=0;
+fig.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};moved=0;autoRot=false;fig.classList.add('drag');fig.setPointerCapture(e.pointerId)});
+fig.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;moved+=Math.abs(dx)+Math.abs(dy);yaw+=dx*0.01;pitch=Math.max(-1.3,Math.min(1.3,pitch+dy*0.01));drag={x:e.clientX,y:e.clientY};draw()});
+fig.addEventListener('pointerup',e=>{fig.classList.remove('drag');if(drag&&moved<6){const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=24;for(const {o,s} of screen){const d=Math.hypot(s[0]-x,s[1]-y);if(d<bd){bd=d;best=o}}if(best){sel=best;draw();inspect()}}drag=null});
+fig.addEventListener('wheel',e=>{e.preventDefault();autoRot=false;zoom=Math.max(0.5,Math.min(3,zoom*(e.deltaY<0?1.1:0.9)));draw()},{passive:false});
+const ro=new ResizeObserver(draw);ro.observe(fig);
+(function spin(){if(autoRot&&!document.hidden){yaw+=0.0025;draw()}requestAnimationFrame(spin)})();
+
+/* ---------------- vocab size ---------------- */
+const BENCH={code:'const tokenizer = new BytePairEncoder({ vocab: 200019, merges: "o200k" });\nfor (let i = 0; i < documents.length; i++) { embeddings.push(tokenizer.encode(documents[i].normalize("NFKC"))); }\n// Internationalization: naïve café résumé — 東京 🚀',
+ prose:'The river curved slowly past the old mill, where children gathered every summer evening to watch the sun disappear behind the hills and listen to stories their grandparents told about the village long ago.'};
+const COL={gpt4o:'var(--route)',gpt4:'var(--contour)',bert:'#1f6f9a',word:'var(--mute)'};
+async function renderVocab(){
+  const text=BENCH[state.bench];$('bench').textContent=`Benchmark: ${[...text].length} characters of ${state.bench==='code'?'code with mixed scripts':'plain English'}.`;
+  await Promise.all(ORDER.map(load));
+  const rows=ORDER.map(k=>({k,n:(tokenize(k,text)||[]).length}));const mx=Math.max(...rows.map(r=>r.n),1);
+  $('lenBars').innerHTML=rows.map(r=>`<div class="bar"><span>${M[r.k].name}</span><div class="tr"><div class="f" style="width:${(r.n/mx*80).toFixed(1)}%;--c:${COL[r.k]}"></div><span class="v" style="left:calc(${(r.n/mx*80).toFixed(1)}% + 8px)">${r.n} tokens</span></div></div>`).join('');
+  const g=rows[0].n,b=rows[2].n,w=rows[3];const unk=(tokenize('word',text)||[]).filter(t=>t.unk).length;
+  $('lenTake').innerHTML=`BERT needs <b>${b}</b> tokens where GPT-4o needs <b>${g}</b> (${(b/g).toFixed(1)}×): its small vocabulary splits rare words and symbols into more fragments. Legacy Word looks short at ${w.n}, but ${unk} of those are &lt;UNK&gt;, so that information is simply gone.`;
+  const vs=[...ORDER.map(k=>({name:M[k].name,v:M[k].size,c:COL[k]})),{name:'256k vocab',v:256000,c:'var(--ink)'}];const p=vs.map(x=>x.v*state.dim),pm=Math.max(...p);
+  const size=bytes=>bytes>=1e9?(bytes/1e9).toFixed(2)+' GB':(bytes/1e6).toFixed(0)+' MB';
+  $('memBars').innerHTML=vs.map((x,i)=>`<div class="bar"><span>${x.name}</span><div class="tr"><div class="f" style="width:${(p[i]/pm*70).toFixed(1)}%;--c:${x.c}"></div><span class="v" style="left:calc(${(p[i]/pm*70).toFixed(1)}% + 8px)">${(p[i]/1e6).toFixed(0)}M params · ${size(p[i]*2)}</span></div></div>`).join('');
+  const big=256000*state.dim;$('memTake').innerHTML=`At ${fmt(state.dim)} dimensions, a 256k vocabulary needs <b>${(big/1e9>=1?(big/1e9).toFixed(2)+' billion':(big/1e6).toFixed(0)+' million')}</b> parameters (${size(big*2)} in FP16) just for its lookup table${state.dim===4096?', before a single transformer layer':''}.`;
+}
+document.querySelectorAll('[data-b]').forEach(b=>b.addEventListener('click',()=>{state.bench=b.dataset.b;document.querySelectorAll('[data-b]').forEach(x=>x.classList.toggle('on',x===b));renderVocab()}));
+document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>{state.dim=+b.dataset.d;document.querySelectorAll('[data-d]').forEach(x=>x.classList.toggle('on',x===b));renderVocab()}));
+
+/* ---------------- concepts ---------------- */
+const CONCEPTS=[
+ ['Token','The smallest unit a model reads. It can be a whole word, part of a word, a space plus a word, a punctuation mark or even a single byte of an emoji.','Inspect tokens in the playground',()=>{setModel('gpt4o');$('txt').value=PRESETS['Standard English'];renderPlay();go('tokenizer')}],
+ ['Vocabulary','The fixed list of every token a model knows, decided before training. GPT-4o knows about 200,000 tokens; classic BERT knows 30,522.','Compare model vocabularies',()=>go('vocab-size')],
+ ['Token ID','Each vocabulary entry has an integer index. The model never sees letters, only this list of numbers, which becomes its input tensor.','View token IDs live',()=>{state.view='ids';document.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('on',x.dataset.v==='ids'));renderPlay();go('tokenizer')}],
+ ['UNK token','Word-level tokenizers replace anything missing from their vocabulary with one shared unknown token, so typos, names and new words lose their meaning entirely.','Trigger <UNK> in legacy mode',()=>{$('txt').value=PRESETS['Subwords & typos'];setModel('word');go('tokenizer')}],
+ ['Subword tokenization','BPE and WordPiece keep frequent words whole and split rare ones into reusable pieces, so the model can still read words it has never seen.','Test subword splitting (BERT)',()=>{$('txt').value=PRESETS['Subwords & typos'];setModel('bert');go('tokenizer')}],
+ ['Vocabulary size','Larger vocabularies give shorter sequences and faster inference, but cost memory in the embedding and output layers. Every model picks a balance.','Explore the vocab size trade-off',()=>go('vocab-size')],
+ ['Vector / embedding','Each token ID selects a row of numbers, its embedding. Training moves these vectors so that related tokens end up close together.','Try 3D vector arithmetic',()=>{setMode('sem');if(!showAn)$('analogy').click();go('embeddings')}],
+ ['Spelling-based vs meaning-based embedding','Spelling-based vectors group words by shared letters (cat, cart, car). Meaning-based vectors, which models learn, group them by use (cat, kitten, dog).','Compare spelling and meaning in 3D',()=>{setMode('lex');go('embeddings')}]
+];
+$('cards').innerHTML=CONCEPTS.map((c,i)=>`<details class="panel card"${i===0?' open':''}><summary><span class="n">Concept ${i+1}</span><h3>${esc(c[0])}</h3></summary><div class="in"><p>${esc(c[1])}</p><button type="button" class="route" data-c="${i}">${esc(c[2])}</button></div></details>`).join('');
+$('cards').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(b)CONCEPTS[b.dataset.c][3]()});
+function go(id){location.hash=id;$(id).scrollIntoView()}
+
+/* nav highlight */
+const secs=['tokenizer','embeddings','vocab-size','concepts'].map(id=>$(id));
+const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting)document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id))},{rootMargin:'-40% 0px -55% 0px'});secs.forEach(s=>io.observe(s));
+
+/* start mid-use */
+$('txt').value=PRESETS['Standard English'];
+renderPlay();setMode('sem');renderVocab().then(inspect);load('gpt4o').then(inspect);
+}
+</script>
+</body>
+</html>
